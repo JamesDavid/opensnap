@@ -1,6 +1,45 @@
 #!/bin/sh
 
 WINDOW_ID="$1"
+SCREEN_WIDTH="$2"
+SCREEN_HEIGHT="$3"
+SCREEN_OFFSET_X="$4"
+SCREEN_OFFSET_Y="$5"
 
-# close the window gracefully
-wmctrl -i -c $WINDOW_ID
+# Use integer division to get QUARTER_WIDTH as an integer
+WIDTH="$(($SCREEN_WIDTH/4))"
+
+# Get the current mouse position
+eval "$(xdotool getmouselocation --shell)"
+MOUSE_X=$X
+
+# Calculate the target X position based on the mouse's current X position within the quadrants
+# Subtract SCREEN_OFFSET_X from X and ensure the result is an integer
+MOUSE_RELATIVE_POSITION=$(($MOUSE_X-$SCREEN_OFFSET_X))
+
+if   [ $MOUSE_RELATIVE_POSITION -lt $(($WIDTH)) ]
+then
+    TARGET_X=$(($SCREEN_OFFSET_X))
+elif [ $MOUSE_RELATIVE_POSITION -lt $((2*$WIDTH)) ]
+then
+    TARGET_X=$(($SCREEN_OFFSET_X+$WIDTH))
+elif [ $MOUSE_RELATIVE_POSITION -lt $((3*$WIDTH)) ]
+then
+    TARGET_X=$(($SCREEN_OFFSET_X+2*$WIDTH))
+else
+    TARGET_X=$(($SCREEN_OFFSET_X+3*$WIDTH))
+fi
+
+GRAVITY="0"
+Y="$(($SCREEN_HEIGHT/2))"
+HEIGHT="$(($SCREEN_HEIGHT/2-65))"
+
+# We need to remove the maximized_horz attribute in case the window was maximized with hit_top before
+wmctrl -i -r "$WINDOW_ID" -b remove,maximized_horz
+
+# Maximize it vertically via EWMH so padding (taskbar for example) is respected
+wmctrl -i -r "$WINDOW_ID" -b add,maximized_vert
+
+# Change position and size of the window
+wmctrl -i -r "$WINDOW_ID" -e $GRAVITY,$TARGET_X,$Y,$WIDTH,$HEIGHT
+
