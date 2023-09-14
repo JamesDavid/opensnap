@@ -37,7 +37,8 @@ int main(int argc, char **argv)
     int action=0;
     int isdrag=0;
     int isinitialclick=1;
-    int scrnn;
+    GdkMonitor *scrnn;
+    int monitor_index;
 
     char launch[MY_MAXPATH*2];
 
@@ -57,10 +58,21 @@ int main(int argc, char **argv)
 
     while(1){
         getMousePosition(dsp, &event, &mousepos);
-        scrnn = gdk_screen_get_monitor_at_point(gdk_screen_get_default(), mousepos.x, mousepos.y);
-        //make mouse coordinates relative to screen
-        relativeMousepos.x=mousepos.x-scrinfo.screens[scrnn].x;
-        relativeMousepos.y=mousepos.y-scrinfo.screens[scrnn].y;
+        GdkDisplay *display = gdk_display_get_default();
+        scrnn = gdk_display_get_monitor_at_point(display, mousepos.x, mousepos.y);        //make mouse coordinates relative to screen
+
+
+        int monitor_count = gdk_display_get_n_monitors(display);
+        for (int i = 0; i < monitor_count; i++) {
+            GdkMonitor *current_monitor = gdk_display_get_monitor(display, i);
+            if (current_monitor == scrnn) {
+                monitor_index = i;
+                break;
+            }
+        }
+
+        relativeMousepos.x=mousepos.x-scrinfo.screens[monitor_index].x;
+        relativeMousepos.y=mousepos.y-scrinfo.screens[monitor_index].y;
         if(verbose)
             printf("Mouse Coordinates: %d %d %d\n", mousepos.x, mousepos.y, mousepos.state );
         if((LEFTCLICK & mousepos.state)==LEFTCLICK){
@@ -68,9 +80,9 @@ int main(int argc, char **argv)
                 action=HIT_TOP;
             else if(relativeMousepos.x<=offset)
                 action=HIT_LEFT;
-            else if(relativeMousepos.x>=scrinfo.screens[scrnn].width-offset-1)
+            else if(relativeMousepos.x>=scrinfo.screens[monitor_index].width-offset-1)
                 action=HIT_RIGHT;
-            else if(relativeMousepos.y>=scrinfo.screens[scrnn].height-offset-1)
+            else if(relativeMousepos.y>=scrinfo.screens[monitor_index].height-offset-1)
                 action=HIT_BOTTOM;
             else {
                 if(!isdrag && isinitialclick) {
@@ -91,7 +103,7 @@ int main(int argc, char **argv)
                 findParentWindow(dsp,&activeWindow,&parentWin);
                 if(verbose)printf("Running script: %s",SCRIPT_NAMES[action]);
                 snprintf(launch, sizeof(launch), "/bin/sh %s/%s %lu %i %i %i %i",configbase,SCRIPT_NAMES[action],parentWin,
-                        scrinfo.screens[scrnn].width,scrinfo.screens[scrnn].height,scrinfo.screens[scrnn].x, scrinfo.screens[scrnn].y);
+                        scrinfo.screens[monitor_index].width,scrinfo.screens[monitor_index].height,scrinfo.screens[monitor_index].x, scrinfo.screens[monitor_index].y);
                 system(launch);
             }
             action=0;
@@ -198,13 +210,15 @@ int directoryExists(char* path){
 }
 
 void getScreens(screens *scrinfo){
-    GdkScreen *screen = gdk_screen_get_default();
-    gint nmon = gdk_screen_get_n_monitors(screen);
+    GdkDisplay *display = gdk_display_get_default();
+    gint nmon = gdk_display_get_n_monitors(display);
     scrinfo->screens = (oRectangle*) malloc(sizeof(oRectangle)*nmon);
     scrinfo->amount=nmon;
     for(int i=0; i < nmon; i++){
         GdkRectangle rect;
-        gdk_screen_get_monitor_geometry(screen, i, &rect);
+        GdkDisplay *display = gdk_display_get_default();
+        GdkMonitor *monitor = gdk_display_get_monitor(display, i);
+        gdk_monitor_get_geometry(monitor, &rect);
         scrinfo->screens[i].x=rect.x;
         scrinfo->screens[i].y=rect.y;
         scrinfo->screens[i].width=rect.width;
